@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Damn Vulnerable DeFi v4 (https://damnvulnerabledefi.xyz)
-pragma solidity =0.8.25;
+pragma solidity ^0.8.30;
 
 // Safe Singleton Factory deployment data
 address constant SAFE_SINGLETON_FACTORY_DEPLOYMENT_SIGNER = 0xE1CB04A0fA36DdD16a06ea828007E35e1a3cBC37;

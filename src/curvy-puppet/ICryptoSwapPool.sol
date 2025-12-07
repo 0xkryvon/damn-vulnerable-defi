@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Damn Vulnerable DeFi v4 (https://damnvulnerabledefi.xyz)
-pragma solidity =0.8.25;
+pragma solidity ^0.8.30;
 
 /*
  * Interface for CryptoSwap pools with implementation at `0xa85461AFc2DEEC01bDA23b5cd267d51F765fba10`

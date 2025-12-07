@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity =0.8.25;
+pragma solidity ^0.8.30;
 
 interface IUniswapV1Exchange {
     event AddLiquidity(address indexed provider, uint256 indexed eth_amount, uint256 indexed token_amount);
